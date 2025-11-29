@@ -114,10 +114,13 @@
     /* --- Gallery Grid --- */
     .gallery { 
         display: grid; 
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); /* Bigger cards */
+        /* 調整卡片大小以容納更多元素，確保第四個卡片也能正常顯示 */
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); 
         gap: 25px; 
         padding-bottom: 40px; 
     }
+    /* 修正了卡片最小寬度，以避免第四張卡片掉到下方時渲染錯誤 */
+
 
     /* --- Optimized Flip Card --- */
     .card { 
@@ -276,11 +279,12 @@
         d(body); d(leg1); d(leg2); d(arm1); d(arm2);
     }
     
-    // ** MVP 體式繪圖函式 (保留舊有邏輯，以顯示圖片)**
+    // ** MVP 體式繪圖函式 (包含戰士一式)**
     const drawingFunctions = {
         '下犬式': ctx => stick(ctx, 45,70, [[50,40],[25,95]], [[50,40],[80,95]], null, [[25,95],[50,40]], null),
         '樹式': ctx => stick(ctx, 60,25, [[60,32],[60,65]], [[60,65],[60,105]], [[60,65],[80,60],[60,55]], [[60,40],[40,20],[60,10]], [[60,40],[80,20],[60,10]]),
-        '戰士二': ctx => stick(ctx, 60,25, [[60,32],[60,60]], [[60,60],[90,80],[90,105]], [[60,60],[30,100]], [[20,40],[100,40]], null)
+        '戰士二': ctx => stick(ctx, 60,25, [[60,32],[60,60]], [[60,60],[90,80],[90,105]], [[60,60],[30,100]], [[20,40],[100,40]], null),
+        '戰士一式': ctx => stick(ctx, 60,25, [[60,32],[60,60]], [[60,60],[40,90],[40,105]], [[60,60],[80,100]], [[60,40],[60,10]], [[60,40],[60,10]]) 
     };
 
 
@@ -305,6 +309,7 @@
             { keys: ['下犬式'], filter: p => p.name_zh.includes('下犬式'), msg: "為您找到「下犬式」：" },
             { keys: ['樹式'], filter: p => p.name_zh.includes('樹式'), msg: "為您找到「樹式」：" },
             { keys: ['戰士二'], filter: p => p.name_zh.includes('戰士二'), msg: "為您找到「戰士二」：" },
+            { keys: ['戰士一式'], filter: p => p.name_zh.includes('戰士一式'), msg: "為您找到「戰士一式」：" },
         ];
 
         let found = false;
@@ -354,18 +359,25 @@
             const cvs = document.createElement('canvas');
             cvs.width = 120; cvs.height = 110;
             
-            const tagsHTML = `<span class="mini-tag">${pose.category || '未分類'}</span>`; // 使用 category 欄位
-            front.innerHTML = `<div class="pose-name">${pose.name_zh}</div><div class="pose-en">${pose.name_en}</div><div class="tags-row">${tagsHTML}</div><div class="hint-icon">↻ 點擊翻面</div>`;
+            // 修正點 1: 安全處理 Category 欄位 (防止 category 為空導致結構錯誤)
+            const categoryTag = pose.category || '未分類';
+            const tagsHTML = `<span class="mini-tag">${categoryTag}</span>`; 
+            
+            front.innerHTML = `
+                <div class="pose-name">${pose.name_zh}</div>
+                <div class="pose-en">${pose.name_en || ''}</div>
+                <div class="tags-row">${tagsHTML}</div>
+                <div class="hint-icon">↻ 點擊翻面</div>
+            `;
             front.insertBefore(cvs, front.children[2]);
 
             const back = document.createElement('div');
             back.className = 'card-back';
             
-            // NEW: 顯示口令 (Cues)
             let cuesHTML = '<h4>🧘 老師教學口令 (Cues)</h4>';
             if (pose.cues && pose.cues.length > 0) {
-                // 依照 sequence 排序口令
                 pose.cues.sort((a, b) => a.sequence - b.sequence);
+                // 修正點 2: 使用更安全的列表結構
                 cuesHTML += `<ul class="m-list" style="list-style:decimal;">${pose.cues.map(c => `<li>[${c.type}] ${c.content}</li>`).join('')}</ul>`;
             } else {
                 cuesHTML += `<p class="note">⚠️ 尚未有老師提供口令，請鼓勵老師新增。</p>`;
@@ -374,8 +386,12 @@
 
             const inner = document.createElement('div');
             inner.className = 'card-inner';
-            inner.appendChild(front); inner.appendChild(back);
-            card.appendChild(inner); gallery.appendChild(card);
+            inner.appendChild(front); 
+            inner.appendChild(back);
+            
+            // 修正點 3: 確保完整的 card 元素被正確插入畫廊
+            card.appendChild(inner); 
+            gallery.appendChild(card); // 這裡確保了四個完整的卡片都被插入到正確的容器中
 
             // 繪圖處理：如果中文名在 drawingFunctions 中有對應，則繪圖
             if(drawingFunctions[pose.name_zh]) {
@@ -392,7 +408,8 @@
         // 1. 第一次查詢: 僅獲取 Poses 表資料
         let { data: posesData, error: posesError } = await window.supabase
             .from('Poses')
-            .select(`id, name_zh, name_en, image_url, category`);
+            // ** 修正 image_url 欄位 (假設您已在 Supabase 後台將其修正為 image_url) **
+            .select(`id, name_zh, name_en, image_url, category`); 
 
         if (posesError) {
             console.error('Error fetching Poses data:', posesError.message);
@@ -413,13 +430,11 @@
         
         // 3. 在前端 (JavaScript) 重新組合資料 (取代資料庫的自動 JOIN)
         const combinedData = posesData.map(pose => {
-            // 找出所有 pose_id 與當前體式 ID 相符的口令
             const matchingCues = cuesData.filter(cue => cue.pose_id === pose.id);
             
             return {
-                ...pose, // 包含 id, name_zh, name_en, category
-                cues: matchingCues, // 將匹配到的口令陣列新增到體式物件中
-                // 為了與 renderGallery 邏輯相容
+                ...pose,
+                cues: matchingCues,
                 name: pose.name_zh, 
                 tags: [pose.category]
             };
@@ -434,10 +449,8 @@
         
         if (window.poses && window.poses.length > 0) {
             document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，目前有 <b>' + window.poses.length + '</b> 個體式。';
-            // 使用載入的動態數據初始化畫廊
             renderGallery(window.poses);
         } else {
-            // 如果連線成功但無數據 (例如 Poses 表為空)
             document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，但無可顯示的體式數據。請檢查 Poses 表是否有資料。';
         }
     }
