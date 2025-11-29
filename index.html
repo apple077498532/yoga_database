@@ -385,30 +385,47 @@
     }
 
     // ==========================================
-    // 4. 初始化與數據載入 (核心改變)
+    // 4. 初始化與數據載入 (核心改變: 拆分查詢，避免 JOIN 錯誤)
     // ==========================================
 
     async function fetchPosesFromSupabase() {
-        // ** 使用 window.supabase 存取 **
-        let { data, error } = await window.supabase
+        // 1. 第一次查詢: 僅獲取 Poses 表資料
+        let { data: posesData, error: posesError } = await window.supabase
             .from('Poses')
-            .select(`
-                id, 
-                name_zh, 
-                name_en, 
-                image_url, 
-                category,
-                cues (content, type, sequence)
-            `);
+            .select(`id, name_zh, name_en, image_url, category`);
 
-        if (error) {
-            console.error('Error fetching data from Supabase:', error.message);
-            document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤訊息：' + error.message;
+        if (posesError) {
+            console.error('Error fetching Poses data:', posesError.message);
+            document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤：無法讀取體式列表。';
             return [];
         }
 
-        // 將數據存入全域變數
-        return data;
+        // 2. 第二次查詢: 獲取 Cues 表所有資料
+        let { data: cuesData, error: cuesError } = await window.supabase
+            .from('Cues')
+            .select(`pose_id, content, type, sequence`);
+
+        if (cuesError) {
+            console.error('Error fetching Cues data:', cuesError.message);
+            document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤：無法讀取口令列表。';
+            return [];
+        }
+        
+        // 3. 在前端 (JavaScript) 重新組合資料 (取代資料庫的自動 JOIN)
+        const combinedData = posesData.map(pose => {
+            // 找出所有 pose_id 與當前體式 ID 相符的口令
+            const matchingCues = cuesData.filter(cue => cue.pose_id === pose.id);
+            
+            return {
+                ...pose, // 包含 id, name_zh, name_en, category
+                cues: matchingCues, // 將匹配到的口令陣列新增到體式物件中
+                // 為了與 renderGallery 邏輯相容
+                name: pose.name_zh, 
+                tags: [pose.category]
+            };
+        });
+
+        return combinedData;
     }
 
     async function initApp() {
@@ -420,7 +437,8 @@
             // 使用載入的動態數據初始化畫廊
             renderGallery(window.poses);
         } else {
-            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，但無可顯示的體式數據。請檢查 Poses 表是否有資料或 RLS 權限。';
+            // 如果連線成功但無數據 (例如 Poses 表為空)
+            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，但無可顯示的體式數據。請檢查 Poses 表是否有資料。';
         }
     }
 
