@@ -83,16 +83,17 @@
     const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
     
-    // 這行必須在 supabase.js 載入之後才能執行
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // 這裡我們不再使用 const supabase，而是直接使用 window.supabase
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         db: { schema: 'public' },
     });
     
-    let poseList = []; // 用來存儲體式列表，供下拉選單使用
+    let poseList = []; 
 
-    // =======================================================
-    // 2. 認證功能 (Auth)
-    // =======================================================
+    // ... (所有函式邏輯保持不變) ...
+    // (由於篇幅限制，後續函式邏輯與您上傳的版本一致，關鍵在於頂部的載入順序與宣告)
+    
+    // ... (請確保以下所有函式都包含在您提交的檔案中) ...
 
     async function signUp() {
         const email = document.getElementById('authEmail').value;
@@ -104,7 +105,6 @@
              return;
         }
 
-        // 這裡的 supabase.auth.signUp 呼叫應該能成功執行
         const { data, error } = await supabase.auth.signUp({ email, password });
 
         if (error) {
@@ -201,10 +201,6 @@
         }
     }
     
-    // =======================================================
-    // 3. 內容管理功能 (Cues)
-    // =======================================================
-
     async function loadPosesForSelection() {
         const { data, error } = await supabase
             .from('Poses')
@@ -245,7 +241,6 @@
             return;
         }
         
-        // 提交 INSERT 請求
         const { error } = await supabase
             .from('Cues')
             .insert({
@@ -253,7 +248,7 @@
                 content: content,
                 type: type,
                 sequence: sequence,
-                created_by: user.id // 使用當前登入使用者的 ID
+                created_by: user.id
             });
             
         if (error) {
@@ -264,10 +259,6 @@
             document.getElementById('cueSequence').value = sequence + 1; 
         }
     }
-    
-    // =======================================================
-    // 4. 輔助函式
-    // =======================================================
     
     function showAuthMessage(message, type = 'info') {
         const authMessage = document.getElementById('authMessage');
@@ -282,7 +273,6 @@
         cueMessage.style.display = 'block';
     }
 
-    // 初始化時檢查登入狀態
     window.onload = checkAuthStatus;
 
 </script>
