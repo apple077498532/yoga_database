@@ -83,6 +83,7 @@
     const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
     
+    // 這行必須在 supabase.js 載入之後才能執行
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         db: { schema: 'public' },
     });
@@ -98,12 +99,12 @@
         const password = document.getElementById('authPassword').value;
         showAuthMessage('註冊中...');
 
-        // 檢查密碼長度是否符合 Supabase 的最小要求 (預設 6 個字符)
         if (password.length < 6) {
              showAuthMessage('註冊失敗：密碼長度至少需要 6 個字符', 'error');
              return;
         }
 
+        // 這裡的 supabase.auth.signUp 呼叫應該能成功執行
         const { data, error } = await supabase.auth.signUp({ email, password });
 
         if (error) {
@@ -111,29 +112,25 @@
             return;
         }
 
-        // 註冊成功後，Supabase 會發送一封確認信
         showAuthMessage('註冊成功！請檢查電子郵件，然後點擊「登入」', 'success');
         
-        // 註冊成功後，將使用者 ID 和預設角色新增到 public.Users 表中
         if (data.user) {
             await insertNewUserToPublicTable(data.user.id, email);
         }
     }
 
     async function insertNewUserToPublicTable(uid, email) {
-        // 這裡預設將所有新註冊的使用者角色設為 'editor' (編輯者)
         const { error } = await supabase
             .from('Users')
             .insert({ 
                 id: uid, 
                 email: email, 
-                display_name: email.split('@')[0] + ' 老師', // 預設名稱
+                display_name: email.split('@')[0] + ' 老師',
                 role: 'editor' 
             });
 
         if (error) {
              console.error('Failed to insert user into public.Users:', error);
-             // 處理：如果新增到 public.Users 失敗，可能需要刪除 auth.users 中的記錄，但 MVP 階段可先忽略
         }
     }
 
@@ -172,11 +169,9 @@
         const cueSection = document.getElementById('cueSection');
         
         if (user) {
-            // 已登入
             authSection.style.display = 'none';
             cueSection.style.display = 'block';
             
-            // 抓取 public.Users 資料 (取得 display_name 和 role)
             const { data: userData, error: userError } = await supabase
                 .from('Users')
                 .select('display_name, role')
@@ -196,11 +191,9 @@
                 <button onclick="signOut()">登出</button>
             `;
             
-            // 載入體式列表供新增口令使用
             loadPosesForSelection();
 
         } else {
-            // 未登入
             authMessage.innerHTML = '請先登入或註冊。';
             authSection.style.display = 'block';
             cueSection.style.display = 'none';
@@ -213,7 +206,6 @@
     // =======================================================
 
     async function loadPosesForSelection() {
-        // 讀取 Poses 列表
         const { data, error } = await supabase
             .from('Poses')
             .select('id, name_zh')
@@ -224,7 +216,7 @@
             return;
         }
 
-        poseList = data; // 存儲資料
+        poseList = data;
         const select = document.getElementById('poseSelect');
         select.innerHTML = '';
         
@@ -265,12 +257,11 @@
             });
             
         if (error) {
-            // 這裡會捕獲 RLS 錯誤
             showCueMessage('提交失敗：' + error.message + ' (請檢查您的 RLS 權限)', 'error');
         } else {
             showCueMessage('口令提交成功！請刷新主網站查看。', 'success');
-            document.getElementById('cueContent').value = ''; // 清空內容
-            document.getElementById('cueSequence').value = sequence + 1; // 順序遞增
+            document.getElementById('cueContent').value = ''; 
+            document.getElementById('cueSequence').value = sequence + 1; 
         }
     }
     
