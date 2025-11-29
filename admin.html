@@ -9,7 +9,7 @@
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         h1 { color: #6c5ce7; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         .form-group { margin-bottom: 15px; }
-        input[type="email"], input[type="password"], textarea, select {
+        input[type="email"], input[type="password"], textarea, select, input[type="number"] {
             width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
             font-size: 16px;
         }
@@ -98,6 +98,12 @@
         const password = document.getElementById('authPassword').value;
         showAuthMessage('註冊中...');
 
+        // 檢查密碼長度是否符合 Supabase 的最小要求 (預設 6 個字符)
+        if (password.length < 6) {
+             showAuthMessage('註冊失敗：密碼長度至少需要 6 個字符', 'error');
+             return;
+        }
+
         const { data, error } = await supabase.auth.signUp({ email, password });
 
         if (error) {
@@ -105,11 +111,10 @@
             return;
         }
 
-        // 註冊成功後，Supabase 會發送一封確認信，但為了 MVP 測試，我們直接模擬登入
-        // 🚨 實際生產環境中，使用者需要先點擊信箱連結！
+        // 註冊成功後，Supabase 會發送一封確認信
         showAuthMessage('註冊成功！請檢查電子郵件，然後點擊「登入」', 'success');
         
-        // 註冊成功後，我們將使用者 ID 和預設角色新增到 public.Users 表中
+        // 註冊成功後，將使用者 ID 和預設角色新增到 public.Users 表中
         if (data.user) {
             await insertNewUserToPublicTable(data.user.id, email);
         }
@@ -128,6 +133,7 @@
 
         if (error) {
              console.error('Failed to insert user into public.Users:', error);
+             // 處理：如果新增到 public.Users 失敗，可能需要刪除 auth.users 中的記錄，但 MVP 階段可先忽略
         }
     }
 
@@ -207,7 +213,7 @@
     // =======================================================
 
     async function loadPosesForSelection() {
-        // 由於我們已修正了公開讀取權限，這裡可以讀取 Poses 列表
+        // 讀取 Poses 列表
         const { data, error } = await supabase
             .from('Poses')
             .select('id, name_zh')
@@ -259,7 +265,7 @@
             });
             
         if (error) {
-            // 這裡會捕獲 RLS 錯誤 (例如，使用者角色不是 'editor' 或沒有 INSERT 權限)
+            // 這裡會捕獲 RLS 錯誤
             showCueMessage('提交失敗：' + error.message + ' (請檢查您的 RLS 權限)', 'error');
         } else {
             showCueMessage('口令提交成功！請刷新主網站查看。', 'success');
