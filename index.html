@@ -281,8 +281,8 @@
     const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
     
-    // 現在可以安全地存取 supabase.createClient
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // ** 修改為使用 window.supabase 確保全域範圍存取 **
+    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         db: { schema: 'public' },
     });
     
@@ -421,45 +421,12 @@
     // ==========================================
 
     async function fetchPosesFromSupabase() {
-        let { data, error } = await supabase
+        // ** 使用 window.supabase 存取 **
+        let { data, error } = await window.supabase
             .from('Poses')
-            // 使用 RLS Join 語法獲取 Poses 與關聯的 Cues 數據
             .select(`
                 id, 
                 name_zh, 
                 name_en, 
                 image_url, 
                 category,
-                cues (content, type, sequence)
-            `);
-
-        if (error) {
-            console.error('Error fetching data from Supabase:', error.message);
-            document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤訊息：' + error.message;
-            // 修正錯誤後，請在瀏覽器 Console 檢查是否有 RLS 相關訊息
-            return [];
-        }
-
-        // 將數據存入全域變數
-        return data;
-    }
-
-    async function initApp() {
-        // 載入動態數據
-        window.poses = await fetchPosesFromSupabase();
-        
-        if (window.poses && window.poses.length > 0) {
-            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，目前有 <b>' + window.poses.length + '</b> 個體式。';
-            // 使用載入的動態數據初始化畫廊
-            renderGallery(window.poses);
-        } else {
-            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，但無可顯示的體式數據。請檢查 Poses 表是否有資料或 RLS 權限。';
-        }
-    }
-
-    // 啟動應用程式
-    initApp();
-
-</script>
-</body>
-</html>
