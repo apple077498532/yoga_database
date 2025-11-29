@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Yoga AI Assistant v12.0 (Dynamic MVP)</title>
+<style>
+    :root { 
+        --bg: #fdfcf0; 
+        --card-bg: #ffffff;
+        --card-back-bg: #fffdf2;
+        --line: #b2bec3; 
+        --text: #2d3436;
+        --text-light: #636e72;
+        --red: #d63031; 
+        --blue: #0984e3; 
+        --accent: #6c5ce7;
+        --accent-hover: #5f27cd;
+        --green: #00b894;
+        --shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+    
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
+        background-color: var(--bg); 
+        background-image: linear-gradient(var(--line) 1px, transparent 1px);
+        background-size: 100% 30px;
+        color: var(--text);
+        margin: 0; padding: 0;
+        overflow-x: hidden;
+    }
+
+    .container { 
+        max-width: 1000px; 
+        margin: 0 auto; 
+        padding: 20px;
+        padding-bottom: 80px; /* 底部留白給手機操作 */
+    }
+
+    /* --- Chat UI (Mobile Optimized) --- */
+    .chat-container {
+        max-width: 700px; 
+        margin: 0 auto 30px auto;
+        display: flex; flex-direction: column; gap: 15px;
+    }
+
+    .ai-box {
+        background: white; padding: 20px; border-radius: 24px;
+        border: 2px solid var(--text); 
+        box-shadow: 6px 6px 0 rgba(0,0,0,0.1);
+        display: flex; gap: 15px; align-items: flex-start;
+        transition: transform 0.2s;
+    }
+    
+    .avatar { 
+        font-size: 32px; background: #eee; width: 56px; height: 56px; 
+        border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+        flex-shrink: 0; 
+    }
+    
+    .ai-text { font-size: 16px; line-height: 1.6; color: #333; font-weight: 500; }
+
+    /* Input Area */
+    .input-group { position: relative; width: 100%; margin-top: 5px; }
+    
+    input {
+        width: 100%; padding: 16px 55px 16px 20px; /* Right padding for button */
+        border: 2px solid var(--text); 
+        border-radius: 35px; font-size: 17px; outline: none; 
+        background: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        appearance: none; /* iOS reset */
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 4px 15px rgba(108, 92, 231, 0.2); }
+    
+    .send-btn {
+        position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+        background: var(--text); color: white; border: none; 
+        width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+        font-size: 20px; transition: 0.2s;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .send-btn:active { transform: translateY(-50%) scale(0.9); }
+
+    /* Scrollable Suggestions (App-like feel) */
+    .suggestions { 
+        display: flex; gap: 10px; margin-top: 5px; 
+        overflow-x: auto; 
+        padding-bottom: 10px; /* Hide scrollbar visual visually but keep functionality */
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE */
+        padding-left: 5px; padding-right: 5px;
+    }
+    .suggestions::-webkit-scrollbar { display: none; }
+
+    .chip { 
+        font-size: 14px; padding: 8px 16px; 
+        background: white; border: 1px solid #ccc; 
+        border-radius: 20px; cursor: pointer; color: #555; 
+        white-space: nowrap; flex-shrink: 0;
+        font-weight: 500;
+        transition: all 0.2s;
+        user-select: none;
+    }
+    .chip:active { transform: scale(0.95); background: #f0f0f0; }
+    
+    .chip.quiz-mode { 
+        background: var(--accent); color: white; border: none; 
+        box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4); 
+    }
+
+    /* --- Gallery Grid --- */
+    .gallery { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); /* Bigger cards */
+        gap: 25px; 
+        padding-bottom: 40px; 
+    }
+
+    /* --- Optimized Flip Card --- */
+    .card { 
+        background: transparent; 
+        width: 100%; 
+        height: 340px; /* Taller for larger font */
+        perspective: 1000px; 
+        cursor: pointer; 
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    .card-inner {
+        position: relative; width: 100%; height: 100%; text-align: center; 
+        transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); 
+        transform-style: preserve-3d;
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        will-change: transform; /* Performance fix for glitch */
+    }
+    
+    /* Hover only on desktop to prevent mobile sticky hover */
+    @media (hover: hover) {
+        .card:hover .card-inner { transform: rotateY(180deg); }
+    }
+    /* Mobile click to flip class (managed by JS for better control) */
+    .card.is-flipped .card-inner { transform: rotateY(180deg); }
+
+    .card-front, .card-back {
+        position: absolute; width: 100%; height: 100%;
+        -webkit-backface-visibility: hidden; backface-visibility: hidden;
+        border-radius: 20px; 
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 20px; 
+        background: var(--card-bg);
+        border: 1px solid rgba(0,0,0,0.1);
+        overflow: hidden; /* Fix content bleeding */
+    }
+
+    /* Front Design */
+    .card-front { z-index: 2; }
+    .card-front canvas { margin-bottom: 10px; filter: contrast(110%); }
+    
+    .pose-name { 
+        font-size: 24px; /* Larger font */
+        font-weight: 800; color: var(--text); margin-bottom: 4px; 
+    }
+    .pose-en { 
+        font-size: 14px; color: var(--text-light); 
+        font-style: italic; margin-bottom: 10px; 
+    }
+    .tags-row { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+    .mini-tag { 
+        font-size: 12px; background: #f1f2f6; color: #636e72; 
+        padding: 3px 8px; border-radius: 6px; 
+    }
+    .hint-icon { 
+        position: absolute; bottom: 15px; right: 15px; 
+        color: var(--accent); font-size: 12px; font-weight: bold; 
+        background: #f0f0ff; padding: 4px 10px; border-radius: 12px;
+    }
+
+    /* Back Design */
+    .card-back { 
+        transform: rotateY(180deg); 
+        background-color: var(--card-back-bg); 
+        align-items: flex-start; text-align: left; 
+        border: 2px solid var(--text);
+        z-index: 1; /* Fix glitch */
+    }
+
+    .muscle-group { margin-bottom: 12px; width: 100%; }
+    .m-title { 
+        font-size: 14px; font-weight: 800; margin-bottom: 4px; 
+        display: flex; align-items: center; color: var(--text);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; display: inline-block;}
+    .dot.red { background: var(--red); box-shadow: 0 0 5px rgba(214, 48, 49, 0.4); } 
+    .dot.blue { background: var(--blue); box-shadow: 0 0 5px rgba(9, 132, 227, 0.4); }
+    
+    .m-list { 
+        font-size: 14px; /* Readability boost */
+        padding-left: 18px; margin: 0; 
+        line-height: 1.5; color: #444; list-style: disc; 
+    }
+    
+    .note { 
+        font-size: 13px; color: var(--text-light); 
+        border-top: 2px dashed #e0e0e0; 
+        padding-top: 10px; margin-top: auto; width: 100%; 
+        line-height: 1.4; background: rgba(255,255,255,0.5);
+        padding: 10px; border-radius: 8px;
+    }
+    
+    .count-badge { 
+        position: absolute; top: -10px; right: -10px; 
+        background: var(--accent); color: white; 
+        padding: 6px 12px; border-radius: 20px; 
+        font-size: 14px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        display: none; z-index: 10;
+    }
+
+    /* --- Quiz Mode UI --- */
+    /* Quiz mode is hidden for MVP */
+    .quiz-container {
+        display: none; 
+    }
+
+    /* --- Mobile Breakpoints --- */
+    @media (max-width: 768px) {
+        body { padding: 15px; background-size: 100% 20px; }
+        .gallery { grid-template-columns: 1fr; gap: 20px; } /* Full width cards on mobile */
+        .card { height: 320px; } /* Slightly shorter for mobile scroll */
+        .ai-box { padding: 15px; flex-direction: row; align-items: flex-start; }
+        .avatar { width: 45px; height: 45px; font-size: 24px; }
+        .ai-text { font-size: 15px; }
+        
+        .card.is-flipped .card-inner { transform: rotateY(180deg); }
+        /* Disable hover flip on touch devices */
+        .card:hover .card-inner { transform: none; }
+        .card.is-flipped:hover .card-inner { transform: rotateY(180deg); }
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div class="chat-container">
+        <div class="ai-box">
+            <div class="count-badge" id="countBadge">0</div>
+            <div class="avatar">🧘‍♀️</div>
+            <div class="ai-text" id="aiResponse">
+                🧘‍♀️ 正在連線至瑜伽知識庫...
+            </div>
+        </div>
+        
+        <div class="input-group" id="searchArea">
+            <input type="text" id="userInput" placeholder="輸入症狀或體式..." onkeydown="if(event.key==='Enter') processIntent()">
+            <button class="send-btn" onclick="processIntent()">→</button>
+        </div>
+
+        <div class="suggestions" id="suggestionArea">
+            <span class="chip" onclick="quickAsk('全部體式')">📚 全部體式</span>
+            <span class="chip" onclick="quickAsk('初學者')">🔰 初學者</span>
+            <span class="chip" onclick="quickAsk('坐骨神經痛')">⚡ 坐骨神經痛</span>
+            <span class="chip" onclick="quickAsk('核心')">🔥 練核心</span>
+            <span class="chip" onclick="quickAsk('生理期')">🩸 生理期</span>
+        </div>
+    </div>
+
+    <div id="quizContainer" class="quiz-container"></div>
+
+    <div id="gallery" class="gallery"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // ==========================================
+    // ** 1. SUPABASE 設定與連線 (已填入您的金鑰)**
+    // ==========================================
+    const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
+    
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        db: { schema: 'public' },
+    });
+    
+    let poses = []; 
+
+    // ==========================================
+    // 2. 繪圖引擎 (小人圖邏輯)
+    // ==========================================
+    function stick(ctx, hx, hy, body, leg1, leg2, arm1, arm2) {
+        ctx.clearRect(0,0,300,300);
+        ctx.strokeStyle = "#2d3436"; ctx.lineWidth = 3.5;
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        
+        // Head
+        ctx.beginPath(); ctx.arc(hx, hy, 8, 0, Math.PI*2); ctx.fill();
+        
+        const d = (pts) => {
+            if(!pts) return;
+            ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+            for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+            ctx.stroke();
+        };
+        d(body); d(leg1); d(leg2); d(arm1); d(arm2);
+    }
+    
+    // ** MVP 體式繪圖函式 (保留舊有邏輯，以顯示圖片)**
+    const drawingFunctions = {
+        '下犬式': ctx => stick(ctx, 45,70, [[50,40],[25,95]], [[50,40],[80,95]], null, [[25,95],[50,40]], null),
+        '樹式': ctx => stick(ctx, 60,25, [[60,32],[60,65]], [[60,65],[60,105]], [[60,65],[80,60],[60,55]], [[60,40],[40,20],[60,10]], [[60,40],[80,20],[60,10]]),
+        '戰士二': ctx => stick(ctx, 60,25, [[60,32],[60,60]], [[60,60],[90,80],[90,105]], [[60,60],[30,100]], [[20,40],[100,40]], null)
+    };
+
+
+    // ==========================================
+    // 3. 核心邏輯 (已修改為使用動態資料)
+    // ==========================================
+    
+    function toggleFlip(card) {
+        card.classList.toggle('is-flipped');
+    }
+
+    function processIntent() {
+        const input = document.getElementById('userInput').value.trim().toLowerCase();
+        if (!input) return;
+
+        const textEl = document.getElementById('aiResponse');
+        const currentPoses = window.poses || poses;
+
+        const mappings = [
+            // 由於新資料庫沒有 kw/tags 欄位，搜尋邏輯簡化為依據中文名稱
+            { keys: ['全部', 'all', '全部體式'], filter: () => true, msg: "這是知識庫中所有體式：" },
+            { keys: ['下犬式'], filter: p => p.name_zh.includes('下犬式'), msg: "為您找到「下犬式」：" },
+            { keys: ['樹式'], filter: p => p.name_zh.includes('樹式'), msg: "為您找到「樹式」：" },
+            { keys: ['戰士二'], filter: p => p.name_zh.includes('戰士二'), msg: "為您找到「戰士二」：" },
+        ];
+
+        let found = false;
+        for (let map of mappings) {
+            if (map.keys.some(k => input.includes(k))) {
+                renderGallery(currentPoses.filter(map.filter));
+                textEl.innerHTML = map.msg;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            const results = currentPoses.filter(p => JSON.stringify(p).toLowerCase().includes(input));
+            if (results.length > 0) {
+                textEl.innerHTML = `為你找到 ${results.length} 個相關體式：`;
+                renderGallery(results);
+            } else {
+                textEl.innerHTML = `找不到相關體式，試試<b>「全部體式」</b>？`;
+                renderGallery([]);
+            }
+        }
+    }
+
+    function quickAsk(text) {
+        document.getElementById('userInput').value = text;
+        processIntent();
+    }
+
+    function renderGallery(list) {
+        const gallery = document.getElementById('gallery');
+        const badge = document.getElementById('countBadge');
+        
+        gallery.style.display = "grid";
+        gallery.innerHTML = '';
+        badge.style.display = list.length > 0 ? 'block' : 'none';
+        badge.innerText = list.length;
+
+        list.forEach(pose => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.onclick = () => toggleFlip(card);
+            
+            const front = document.createElement('div');
+            front.className = 'card-front';
+            
+            const cvs = document.createElement('canvas');
+            cvs.width = 120; cvs.height = 110;
+            
+            const tagsHTML = `<span class="mini-tag">${pose.category || '未分類'}</span>`; // 使用 category 欄位
+            front.innerHTML = `<div class="pose-name">${pose.name_zh}</div><div class="pose-en">${pose.name_en}</div><div class="tags-row">${tagsHTML}</div><div class="hint-icon">↻ 點擊翻面</div>`;
+            front.insertBefore(cvs, front.children[2]);
+
+            const back = document.createElement('div');
+            back.className = 'card-back';
+            
+            // NEW: 顯示口令 (Cues)
+            let cuesHTML = '<h4>🧘 老師教學口令 (Cues)</h4>';
+            if (pose.cues && pose.cues.length > 0) {
+                // 依照 sequence 排序口令
+                pose.cues.sort((a, b) => a.sequence - b.sequence);
+                cuesHTML += `<ul class="m-list" style="list-style:decimal;">${pose.cues.map(c => `<li>[${c.type}] ${c.content}</li>`).join('')}</ul>`;
+            } else {
+                cuesHTML += `<p class="note">⚠️ 尚未有老師提供口令，請鼓勵老師新增。</p>`;
+            }
+            back.innerHTML = `${cuesHTML}`; 
+
+            const inner = document.createElement('div');
+            inner.className = 'card-inner';
+            inner.appendChild(front); inner.appendChild(back);
+            card.appendChild(inner); gallery.appendChild(card);
+
+            // 繪圖處理：如果中文名在 drawingFunctions 中有對應，則繪圖
+            if(drawingFunctions[pose.name_zh]) {
+                 setTimeout(() => { drawingFunctions[pose.name_zh](cvs.getContext('2d')); }, 0);
+            }
+        });
+    }
+
+    // ==========================================
+    // 4. 初始化與數據載入 (核心改變)
+    // ==========================================
+
+    async function fetchPosesFromSupabase() {
+        let { data, error } = await supabase
+            .from('Poses')
+            // 使用 RLS Join 語法獲取 Poses 與關聯的 Cues 數據
+            .select(`
+                id, 
+                name_zh, 
+                name_en, 
+                image_url, 
+                category,
+                cues (content, type, sequence)
+            `);
+
+        if (error) {
+            console.error('Error fetching data from Supabase:', error.message);
+            document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤訊息：' + error.message;
+            return [];
+        }
+
+        // 將數據存入全域變數
+        return data;
+    }
+
+    async function initApp() {
+        // 載入動態數據
+        window.poses = await fetchPosesFromSupabase();
+        
+        if (window.poses && window.poses.length > 0) {
+            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，目前有 <b>' + window.poses.length + '</b> 個體式。';
+            // 使用載入的動態數據初始化畫廊
+            renderGallery(window.poses);
+        } else {
+            document.getElementById('aiResponse').innerHTML = 'Namaste！知識庫載入完成，但無可顯示的體式數據。請檢查 Poses 表是否有資料或 RLS 權限。';
+        }
+    }
+
+    // 啟動應用程式
+    initApp();
+
+</script>
+</body>
+</html>
