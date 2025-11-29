@@ -281,6 +281,7 @@
     const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
     
+    // 現在可以安全地存取 supabase.createClient
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         db: { schema: 'public' },
     });
@@ -435,6 +436,7 @@
         if (error) {
             console.error('Error fetching data from Supabase:', error.message);
             document.getElementById('aiResponse').innerHTML = '❌ 資料庫連線失敗！錯誤訊息：' + error.message;
+            // 修正錯誤後，請在瀏覽器 Console 檢查是否有 RLS 相關訊息
             return [];
         }
 
