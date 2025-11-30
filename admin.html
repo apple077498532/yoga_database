@@ -181,6 +181,16 @@
             return;
         }
 
+        // ========== 最終 RLS 繞過/修正：強制刷新 Token ==========
+        // 這是解決 RLS 錯誤的關鍵步驟：強制 Supabase 刷新 JWT
+        if (data.user) {
+            const { error: updateError } = await supabase.auth.updateUser({
+                data: { last_login: new Date().toISOString() } // 傳輸一個無害的更新
+            });
+            if (updateError) console.error("Error refreshing JWT:", updateError);
+        }
+        // ========================================================
+
         checkAuthStatus();
     }
 
@@ -362,11 +372,11 @@
     // =======================================================
     async function submitNewPose() {
         const name_zh = document.getElementById('newPoseNameZh').value.trim();
-        // 英文名稱欄位已隱藏，但我們會傳輸其值（可能是空字串）
-        const name_en = document.getElementById('newPoseNameEn').value.trim();
+        // 英文名稱欄位已隱藏，傳輸空字串
+        const name_en = document.getElementById('newPoseNameEn').value.trim(); 
         const category = document.getElementById('newPoseCategory').value.trim();
 
-        // 修正檢查：只檢查中文名稱和分類
+        // 修正檢查：只檢查中文名稱和分類 (因為英文名稱已隱藏)
         if (!name_zh || !category) {
             showPoseMessage('請填寫中文名稱和分類欄位！', 'error');
             return;
@@ -385,7 +395,7 @@
             .from('Poses')
             .insert({
                 name_zh: name_zh,
-                // 即使是空字串，也傳輸 name_en
+                // 傳輸 name_en，即使是空字串
                 name_en: name_en, 
                 category: category,
                 updated_by: user.id 
