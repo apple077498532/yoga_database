@@ -83,17 +83,15 @@
     const SUPABASE_URL = 'https://webmekskpvfmiwzycuam.supabase.co'; 
     const SUPABASE_ANON_KEY = 'sb_publishable_aiSsE7UnC4DNZPaTvIx23A_x-0Nk8mu'; 
     
-    // 這裡我們不再使用 const supabase，而是直接使用 window.supabase
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         db: { schema: 'public' },
     });
     
     let poseList = []; 
 
-    // ... (所有函式邏輯保持不變) ...
-    // (由於篇幅限制，後續函式邏輯與您上傳的版本一致，關鍵在於頂部的載入順序與宣告)
-    
-    // ... (請確保以下所有函式都包含在您提交的檔案中) ...
+    // =======================================================
+    // 2. 認證功能 (Auth)
+    // =======================================================
 
     async function signUp() {
         const email = document.getElementById('authEmail').value;
@@ -178,11 +176,24 @@
                 .eq('id', user.id)
                 .single();
 
+            // =====================================================
+            // ** 修正邏輯：確保登出按鈕永遠顯示，即使讀取角色失敗 **
+            // =====================================================
+
             if (userError) {
+                 // 這是您當前遇到的情況：無法讀取 public.Users 表 (因為 public.Users 數據可能還沒同步)
                  authMessage.innerHTML = '✅ 登入成功！但無法讀取您的角色資訊。';
+                 authInfo.style.display = 'block';
+                 authInfo.innerHTML = `
+                     <p><strong>帳號:</strong> ${user.email}</p>
+                     <p><strong>⚠️ 無法取得角色。</strong></p>
+                     <button onclick="signOut()">登出</button>
+                 `;
+                 // 雖然不能讀取體式，但現在可以登出了
                  return;
             }
             
+            // 正常登入流程
             authMessage.innerHTML = `✅ 登入成功！歡迎您，${userData.display_name}！`;
             authInfo.style.display = 'block';
             authInfo.innerHTML = `
@@ -191,9 +202,11 @@
                 <button onclick="signOut()">登出</button>
             `;
             
+            // 載入體式列表 (只有在 userData 成功讀取時才會執行)
             loadPosesForSelection();
 
         } else {
+            // 未登入
             authMessage.innerHTML = '請先登入或註冊。';
             authSection.style.display = 'block';
             cueSection.style.display = 'none';
@@ -201,7 +214,12 @@
         }
     }
     
+    // =======================================================
+    // 3. 內容管理功能 (Cues)
+    // =======================================================
+
     async function loadPosesForSelection() {
+        // 讀取 Poses 列表
         const { data, error } = await supabase
             .from('Poses')
             .select('id, name_zh')
@@ -209,6 +227,7 @@
 
         if (error) {
             showCueMessage('無法載入體式列表：' + error.message, 'error');
+            // 由於無法載入體式，下拉選單會是空的
             return;
         }
 
@@ -222,6 +241,9 @@
             option.textContent = pose.name_zh;
             select.appendChild(option);
         });
+        
+        // 如果載入成功，清空錯誤訊息
+        showCueMessage('', 'success');
     }
 
     async function submitCue() {
@@ -260,6 +282,10 @@
         }
     }
     
+    // =======================================================
+    // 4. 輔助函式
+    // =======================================================
+    
     function showAuthMessage(message, type = 'info') {
         const authMessage = document.getElementById('authMessage');
         authMessage.innerHTML = message;
@@ -273,6 +299,7 @@
         cueMessage.style.display = 'block';
     }
 
+    // 初始化時檢查登入狀態
     window.onload = checkAuthStatus;
 
 </script>
