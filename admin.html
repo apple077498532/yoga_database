@@ -60,7 +60,8 @@
         </div>
         <div class="form-group">
             <label for="newPoseCategory">分類 (e.g., 站姿):</label>
-            <input type="text" id="newPoseCategory" required>
+            <input type="text" id="newPoseCategory" list="categoryOptions" required>
+            <datalist id="categoryOptions"></datalist> 
         </div>
         <button onclick="submitNewPose()">提交新體式</button>
         <div id="poseMessage" class="message" style="display: none;"></div>
@@ -185,13 +186,13 @@
         const authInfo = document.getElementById('authInfo');
         const authSection = document.getElementById('authSection');
         const cueSection = document.getElementById('cueSection');
-        const poseAddSection = document.getElementById('poseAddSection'); // 新增獲取 Pose 區塊
+        const poseAddSection = document.getElementById('poseAddSection');
 
         
         if (user) {
             authSection.style.display = 'none';
             cueSection.style.display = 'block';
-            poseAddSection.style.display = 'block'; // 登入後顯示新增體式區塊
+            poseAddSection.style.display = 'block'; 
             
             const { data: userData, error: userError } = await supabase
                 .from('Users')
@@ -218,13 +219,14 @@
                 <button onclick="signOut()">登出</button>
             `;
             
+            loadCategoryOptions(); // NEW: 先載入分類選項
             loadPosesForSelection(); // 載入體式列表
 
         } else {
             authMessage.innerHTML = '請先登入或註冊。';
             authSection.style.display = 'block';
             cueSection.style.display = 'none';
-            poseAddSection.style.display = 'none'; // 未登入隱藏
+            poseAddSection.style.display = 'none'; 
             authInfo.style.display = 'none';
         }
     }
@@ -232,6 +234,32 @@
     // =======================================================
     // 3. 內容管理功能 (Cues)
     // =======================================================
+
+    // NEW: 載入分類選項，用於自動完成
+    async function loadCategoryOptions() {
+        const { data, error } = await supabase
+            .from('Poses')
+            .select('category')
+            .not('category', 'is', null); 
+
+        if (error) {
+            console.error("Error loading categories:", error);
+            return;
+        }
+
+        // 提取所有不重複的分類名稱
+        const uniqueCategories = [...new Set(data.map(item => item.category.trim()))].filter(Boolean);
+        
+        const datalist = document.getElementById('categoryOptions');
+        datalist.innerHTML = ''; 
+        
+        uniqueCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            datalist.appendChild(option);
+        });
+    }
+
 
     async function loadPosesForSelection() {
         // 讀取 Poses 列表
@@ -252,7 +280,8 @@
         poseList.forEach(pose => {
             const option = document.createElement('option');
             option.value = pose.id;
-            option.textContent = pose.name_zh;
+            // 這裡只顯示中文名稱
+            option.textContent = pose.name_zh; 
             select.appendChild(option);
         });
         
@@ -297,7 +326,7 @@
     }
 
     // =======================================================
-    // 4. 新增體式功能 (Poses) - 新增區塊
+    // 4. 新增體式功能 (Poses)
     // =======================================================
     async function submitNewPose() {
         const name_zh = document.getElementById('newPoseNameZh').value.trim();
@@ -332,12 +361,14 @@
         } else {
             showPoseMessage(`體式 "${name_zh}" 提交成功！`, 'success');
             
-            // 清空表單並刷新體式列表 (供口令區選擇新體式)
+            // 清空表單
             document.getElementById('newPoseNameZh').value = '';
             document.getElementById('newPoseNameEn').value = '';
             document.getElementById('newPoseCategory').value = '';
             
-            loadPosesForSelection(); // 重新載入下拉選單
+            // 刷新分類和體式列表
+            loadCategoryOptions(); 
+            loadPosesForSelection(); 
         }
     }
 
