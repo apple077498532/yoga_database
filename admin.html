@@ -64,7 +64,7 @@
 
 
     <div id="poseAddSection" class="section" style="display: none;">
-        <h2>📝 新增體式 (Pose)</h2>
+        <h2>📝 新增體式 (Pose) 及首條口令</h2>
         <div class="form-group">
             <label for="newPoseNameZh">中文名稱 (e.g., 幻椅式):</label>
             <input type="text" id="newPoseNameZh" required>
@@ -80,12 +80,26 @@
             <input type="text" id="newPoseCategory" list="categoryOptions" required>
             <datalist id="categoryOptions"></datalist> 
         </div>
-        <button onclick="submitNewPose()">提交新體式</button>
+        
+        <div class="form-group">
+            <label for="initialCueType">首條口令類型:</label>
+            <select id="initialCueType" required>
+                <option value="entry">進入體式 (entry)</option>
+                <option value="action">動作精修 (action)</option>
+                <option value="safety">安全提醒 (safety)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="initialCueContent">首條口令內容 (順序 1):</label>
+            <textarea id="initialCueContent" rows="2" placeholder="例如: 雙手推地，坐骨向後向上延伸..." required></textarea>
+        </div>
+
+        <button onclick="submitNewPose()">提交新體式 + 首條口令</button>
         <div id="poseMessage" class="message" style="display: none;"></div>
     </div>
 
     <div id="cueSection" class="section" style="display: none;">
-        <h2>📝 新增教學口令 (Cues)</h2>
+        <h2>📝 編輯口令 (現有體式新增)</h2>
         <div class="form-group">
             <label for="poseSelect">選擇體式:</label>
             <select id="poseSelect" required></select>
@@ -104,7 +118,7 @@
         </div>
         <div class="form-group">
             <label for="cueSequence">順序 (數字):</label>
-            <input type="number" id="cueSequence" value="1" min="1" required>
+            <input type="number" id="cueSequence" value="2" min="1" required>
         </div>
         <button onclick="submitCue()">提交口令</button>
         <div id="cueMessage" class="message" style="display: none;"></div>
@@ -181,16 +195,14 @@
             return;
         }
 
-        // ========== 最終 RLS 繞過/修正：強制刷新 Token ==========
-        // 這是解決 RLS 錯誤的關鍵步驟：強制 Supabase 刷新 JWT
+        // RLS 繞過/修正：強制刷新 Token
         if (data.user) {
             const { error: updateError } = await supabase.auth.updateUser({
-                data: { last_login: new Date().toISOString() } // 傳輸一個無害的更新
+                data: { last_login: new Date().toISOString() }
             });
             if (updateError) console.error("Error refreshing JWT:", updateError);
         }
-        // ========================================================
-
+        
         checkAuthStatus();
     }
 
@@ -216,7 +228,7 @@
             authSection.style.display = 'none';
             flowSelection.style.display = 'block';
 
-            // 預設選擇新增體式模式
+            // 預設選擇新增體式模式 (新流程)
             document.getElementById('flowNew').checked = true;
             switchView('new');
             
@@ -368,17 +380,21 @@
     }
 
     // =======================================================
-    // 4. 新增體式功能 (Poses)
+    // 4. 新增體式功能 (Poses) - 單次提交體式與首條口令
     // =======================================================
     async function submitNewPose() {
         const name_zh = document.getElementById('newPoseNameZh').value.trim();
         // 英文名稱欄位已隱藏，傳輸空字串
-        const name_en = document.getElementById('newPoseNameEn').value.trim(); 
+        const name_en = document.getElementById('newPoseNameEn').value.trim() || ''; 
         const category = document.getElementById('newPoseCategory').value.trim();
+        
+        // NEW CUE INPUTS:
+        const cueContent = document.getElementById('initialCueContent').value.trim();
+        const cueType = document.getElementById('initialCueType').value;
 
-        // 修正檢查：只檢查中文名稱和分類 (因為英文名稱已隱藏)
-        if (!name_zh || !category) {
-            showPoseMessage('請填寫中文名稱和分類欄位！', 'error');
+        // 修正檢查：體式名稱、分類、首條口令都不能為空
+        if (!name_zh || !category || !cueContent) {
+            showPoseMessage('請填寫體式中文名稱、分類和首條口令內容！', 'error');
             return;
         }
 
@@ -390,33 +406,54 @@
 
         showPoseMessage('提交中...', 'info');
 
-        // 提交 INSERT 請求到 Poses 表
-        const { error } = await supabase
+        // --- STEP 1: 提交新體式到 Poses 表 (必須返回新 ID) ---
+        const { data: newPoseData, error: poseError } = await supabase
             .from('Poses')
             .insert({
                 name_zh: name_zh,
-                // 傳輸 name_en，即使是空字串
-                name_en: name_en, 
+                name_en: name_en,
                 category: category,
                 updated_by: user.id 
-            });
+            })
+            .select('id') // 請求返回新建立的資料的 ID
+            .single();
 
-        if (error) {
-            showPoseMessage('體式提交失敗：' + error.message + ' (請檢查 Poses 表 RLS)', 'error');
-        } else {
-            showPoseMessage(`體式 "${name_zh}" 提交成功！您可以開始為其新增口令。`, 'success');
-            
-            // 清空表單
-            document.getElementById('newPoseNameZh').value = '';
-            document.getElementById('newPoseNameEn').value = '';
-            document.getElementById('newPoseCategory').value = '';
-            
-            // 刷新分類和體式列表，並自動切換到新增口令介面
-            loadCategoryOptions(); 
-            loadPosesForSelection(); 
-            document.getElementById('flowExisting').checked = true;
-            switchView('existing');
+        if (poseError) {
+            showPoseMessage('體式提交失敗：' + poseError.message + ' (請檢查 Poses 表 RLS)', 'error');
+            return;
         }
+        
+        const newPoseId = newPoseData.id;
+
+        // --- STEP 2: 提交首條口令到 Cues 表 ---
+        const { error: cueError } = await supabase
+            .from('Cues')
+            .insert({
+                pose_id: newPoseId, 
+                content: cueContent,
+                type: cueType,
+                sequence: 1, // 設為順序 1
+                created_by: user.id
+            });
+                
+        if (cueError) {
+            showPoseMessage('體式創建成功，但口令提交失敗：' + cueError.message + ' (請檢查 Cues 表 RLS)', 'error');
+            return;
+        }
+
+        // --- STEP 3: 成功並清理 ---
+        showPoseMessage(`體式 "${name_zh}" 及首條口令提交成功！`, 'success');
+        
+        // 清空表單並刷新列表
+        document.getElementById('newPoseNameZh').value = '';
+        document.getElementById('newPoseNameEn').value = '';
+        document.getElementById('newPoseCategory').value = '';
+        document.getElementById('initialCueContent').value = '';
+        
+        loadCategoryOptions(); 
+        loadPosesForSelection(); 
+        document.getElementById('flowExisting').checked = true;
+        switchView('existing'); // 自動切換到新增口令模式 (方便老師繼續新增第2/3條口令)
     }
 
     function showPoseMessage(message, type = 'info') {
