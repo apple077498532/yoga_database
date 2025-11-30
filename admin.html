@@ -24,6 +24,8 @@
         .section { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ddd; }
         #authInfo { background: #f1f2f6; padding: 15px; border-radius: 8px; font-size: 14px; }
         #authStatus { margin-bottom: 20px; }
+        /* 調整 radio button 顯示 */
+        #flowSelection label { margin-right: 20px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -48,16 +50,31 @@
         <button onclick="signIn()">登入</button>
     </div>
 
+    <div id="flowSelection" class="section" style="display: none;">
+        <h2>選擇操作模式</h2>
+        <div class="form-group">
+            <input type="radio" id="flowNew" name="adminFlow" value="new" onclick="switchView('new')" checked>
+            <label for="flowNew">➊ 新增體式 + 口令 (新體式)</label>
+            
+            <input type="radio" id="flowExisting" name="adminFlow" value="existing" onclick="switchView('existing')">
+            <label for="flowExisting">➋ 編輯口令 (現有體式)</label>
+        </div>
+        <hr style="border: 1px dashed #eee; margin: 10px 0;">
+    </div>
+
+
     <div id="poseAddSection" class="section" style="display: none;">
-        <h2>➕ 新增體式 (Pose)</h2>
+        <h2>📝 新增體式 (Pose)</h2>
         <div class="form-group">
             <label for="newPoseNameZh">中文名稱 (e.g., 幻椅式):</label>
             <input type="text" id="newPoseNameZh" required>
         </div>
-        <div class="form-group">
+        
+        <div class="form-group" style="display: none;">
             <label for="newPoseNameEn">英文名稱 (e.g., Chair Pose):</label>
-            <input type="text" id="newPoseNameEn" required>
+            <input type="text" id="newPoseNameEn"> 
         </div>
+
         <div class="form-group">
             <label for="newPoseCategory">分類 (e.g., 站姿):</label>
             <input type="text" id="newPoseCategory" list="categoryOptions" required>
@@ -66,8 +83,6 @@
         <button onclick="submitNewPose()">提交新體式</button>
         <div id="poseMessage" class="message" style="display: none;"></div>
     </div>
-
-    <hr style="border: 1px solid #ddd; margin: 40px 0;">
 
     <div id="cueSection" class="section" style="display: none;">
         <h2>📝 新增教學口令 (Cues)</h2>
@@ -185,14 +200,15 @@
         const authMessage = document.getElementById('authMessage');
         const authInfo = document.getElementById('authInfo');
         const authSection = document.getElementById('authSection');
-        const cueSection = document.getElementById('cueSection');
-        const poseAddSection = document.getElementById('poseAddSection');
-
+        const flowSelection = document.getElementById('flowSelection');
         
         if (user) {
             authSection.style.display = 'none';
-            cueSection.style.display = 'block';
-            poseAddSection.style.display = 'block'; 
+            flowSelection.style.display = 'block';
+
+            // 預設選擇新增體式模式
+            document.getElementById('flowNew').checked = true;
+            switchView('new');
             
             const { data: userData, error: userError } = await supabase
                 .from('Users')
@@ -219,15 +235,32 @@
                 <button onclick="signOut()">登出</button>
             `;
             
-            loadCategoryOptions(); // NEW: 先載入分類選項
+            loadCategoryOptions(); // 載入分類選項
             loadPosesForSelection(); // 載入體式列表
 
         } else {
             authMessage.innerHTML = '請先登入或註冊。';
             authSection.style.display = 'block';
-            cueSection.style.display = 'none';
-            poseAddSection.style.display = 'none'; 
+            flowSelection.style.display = 'none';
+            document.getElementById('poseAddSection').style.display = 'none'; 
+            document.getElementById('cueSection').style.display = 'none'; 
             authInfo.style.display = 'none';
+        }
+    }
+
+    // NEW: 流程切換功能
+    function switchView(mode) {
+        const poseAdd = document.getElementById('poseAddSection');
+        const cueAdd = document.getElementById('cueSection');
+        
+        if (mode === 'new') {
+            poseAdd.style.display = 'block';
+            cueAdd.style.display = 'none';
+            showPoseMessage('請先提交新的體式記錄。', 'info');
+        } else if (mode === 'existing') {
+            poseAdd.style.display = 'none';
+            cueAdd.style.display = 'block';
+            showCueMessage('請選擇現有體式並新增口令。', 'info');
         }
     }
     
@@ -235,7 +268,7 @@
     // 3. 內容管理功能 (Cues)
     // =======================================================
 
-    // NEW: 載入分類選項，用於自動完成
+    // 載入分類選項，用於自動完成
     async function loadCategoryOptions() {
         const { data, error } = await supabase
             .from('Poses')
@@ -247,7 +280,6 @@
             return;
         }
 
-        // 提取所有不重複的分類名稱
         const uniqueCategories = [...new Set(data.map(item => item.category.trim()))].filter(Boolean);
         
         const datalist = document.getElementById('categoryOptions');
@@ -280,7 +312,7 @@
         poseList.forEach(pose => {
             const option = document.createElement('option');
             option.value = pose.id;
-            // 這裡只顯示中文名稱
+            // 只顯示中文名稱
             option.textContent = pose.name_zh; 
             select.appendChild(option);
         });
@@ -317,7 +349,7 @@
             });
             
         if (error) {
-            showCueMessage('提交失敗：' + error.message + ' (請檢查您的 RLS 權限)', 'error');
+            showCueMessage('提交失敗：' + error.message + ' (請檢查 Cues 表 RLS)', 'error');
         } else {
             showCueMessage('口令提交成功！請刷新主網站查看。', 'success');
             document.getElementById('cueContent').value = ''; 
@@ -330,11 +362,13 @@
     // =======================================================
     async function submitNewPose() {
         const name_zh = document.getElementById('newPoseNameZh').value.trim();
+        // 英文名稱欄位已隱藏，但我們會傳輸其值（可能是空字串）
         const name_en = document.getElementById('newPoseNameEn').value.trim();
         const category = document.getElementById('newPoseCategory').value.trim();
 
-        if (!name_zh || !name_en || !category) {
-            showPoseMessage('請填寫所有體式欄位！', 'error');
+        // 修正檢查：只檢查中文名稱和分類
+        if (!name_zh || !category) {
+            showPoseMessage('請填寫中文名稱和分類欄位！', 'error');
             return;
         }
 
@@ -351,7 +385,8 @@
             .from('Poses')
             .insert({
                 name_zh: name_zh,
-                name_en: name_en,
+                // 即使是空字串，也傳輸 name_en
+                name_en: name_en, 
                 category: category,
                 updated_by: user.id 
             });
@@ -359,16 +394,18 @@
         if (error) {
             showPoseMessage('體式提交失敗：' + error.message + ' (請檢查 Poses 表 RLS)', 'error');
         } else {
-            showPoseMessage(`體式 "${name_zh}" 提交成功！`, 'success');
+            showPoseMessage(`體式 "${name_zh}" 提交成功！您可以開始為其新增口令。`, 'success');
             
             // 清空表單
             document.getElementById('newPoseNameZh').value = '';
             document.getElementById('newPoseNameEn').value = '';
             document.getElementById('newPoseCategory').value = '';
             
-            // 刷新分類和體式列表
+            // 刷新分類和體式列表，並自動切換到新增口令介面
             loadCategoryOptions(); 
             loadPosesForSelection(); 
+            document.getElementById('flowExisting').checked = true;
+            switchView('existing');
         }
     }
 
