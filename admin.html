@@ -9,7 +9,7 @@
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         h1 { color: #6c5ce7; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         .form-group { margin-bottom: 15px; }
-        input[type="email"], input[type="password"], textarea, select, input[type="number"] {
+        input[type="email"], input[type="password"], textarea, select, input[type="number"], input[type="text"] {
             width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
             font-size: 16px;
         }
@@ -47,6 +47,26 @@
         <button onclick="signUp()">註冊</button>
         <button onclick="signIn()">登入</button>
     </div>
+
+    <div id="poseAddSection" class="section" style="display: none;">
+        <h2>➕ 新增體式 (Pose)</h2>
+        <div class="form-group">
+            <label for="newPoseNameZh">中文名稱 (e.g., 幻椅式):</label>
+            <input type="text" id="newPoseNameZh" required>
+        </div>
+        <div class="form-group">
+            <label for="newPoseNameEn">英文名稱 (e.g., Chair Pose):</label>
+            <input type="text" id="newPoseNameEn" required>
+        </div>
+        <div class="form-group">
+            <label for="newPoseCategory">分類 (e.g., 站姿):</label>
+            <input type="text" id="newPoseCategory" required>
+        </div>
+        <button onclick="submitNewPose()">提交新體式</button>
+        <div id="poseMessage" class="message" style="display: none;"></div>
+    </div>
+
+    <hr style="border: 1px solid #ddd; margin: 40px 0;">
 
     <div id="cueSection" class="section" style="display: none;">
         <h2>📝 新增教學口令 (Cues)</h2>
@@ -165,10 +185,13 @@
         const authInfo = document.getElementById('authInfo');
         const authSection = document.getElementById('authSection');
         const cueSection = document.getElementById('cueSection');
+        const poseAddSection = document.getElementById('poseAddSection'); // 新增獲取 Pose 區塊
+
         
         if (user) {
             authSection.style.display = 'none';
             cueSection.style.display = 'block';
+            poseAddSection.style.display = 'block'; // 登入後顯示新增體式區塊
             
             const { data: userData, error: userError } = await supabase
                 .from('Users')
@@ -176,12 +199,7 @@
                 .eq('id', user.id)
                 .single();
 
-            // =====================================================
-            // ** 修正邏輯：確保登出按鈕永遠顯示，即使讀取角色失敗 **
-            // =====================================================
-
             if (userError) {
-                 // 這是您當前遇到的情況：無法讀取 public.Users 表 (因為 public.Users 數據可能還沒同步)
                  authMessage.innerHTML = '✅ 登入成功！但無法讀取您的角色資訊。';
                  authInfo.style.display = 'block';
                  authInfo.innerHTML = `
@@ -189,11 +207,9 @@
                      <p><strong>⚠️ 無法取得角色。</strong></p>
                      <button onclick="signOut()">登出</button>
                  `;
-                 // 雖然不能讀取體式，但現在可以登出了
                  return;
             }
             
-            // 正常登入流程
             authMessage.innerHTML = `✅ 登入成功！歡迎您，${userData.display_name}！`;
             authInfo.style.display = 'block';
             authInfo.innerHTML = `
@@ -202,14 +218,13 @@
                 <button onclick="signOut()">登出</button>
             `;
             
-            // 載入體式列表 (只有在 userData 成功讀取時才會執行)
-            loadPosesForSelection();
+            loadPosesForSelection(); // 載入體式列表
 
         } else {
-            // 未登入
             authMessage.innerHTML = '請先登入或註冊。';
             authSection.style.display = 'block';
             cueSection.style.display = 'none';
+            poseAddSection.style.display = 'none'; // 未登入隱藏
             authInfo.style.display = 'none';
         }
     }
@@ -227,7 +242,6 @@
 
         if (error) {
             showCueMessage('無法載入體式列表：' + error.message, 'error');
-            // 由於無法載入體式，下拉選單會是空的
             return;
         }
 
@@ -242,7 +256,6 @@
             select.appendChild(option);
         });
         
-        // 如果載入成功，清空錯誤訊息
         showCueMessage('', 'success');
     }
 
@@ -263,6 +276,7 @@
             return;
         }
         
+        // 提交 INSERT 請求
         const { error } = await supabase
             .from('Cues')
             .insert({
@@ -281,9 +295,62 @@
             document.getElementById('cueSequence').value = sequence + 1; 
         }
     }
-    
+
     // =======================================================
-    // 4. 輔助函式
+    // 4. 新增體式功能 (Poses) - 新增區塊
+    // =======================================================
+    async function submitNewPose() {
+        const name_zh = document.getElementById('newPoseNameZh').value.trim();
+        const name_en = document.getElementById('newPoseNameEn').value.trim();
+        const category = document.getElementById('newPoseCategory').value.trim();
+
+        if (!name_zh || !name_en || !category) {
+            showPoseMessage('請填寫所有體式欄位！', 'error');
+            return;
+        }
+
+        const user = (await supabase.auth.getUser()).data.user;
+        if (!user) {
+            showPoseMessage('登入狀態遺失，請重新登入', 'error');
+            return;
+        }
+
+        showPoseMessage('提交中...', 'info');
+
+        // 提交 INSERT 請求到 Poses 表
+        const { error } = await supabase
+            .from('Poses')
+            .insert({
+                name_zh: name_zh,
+                name_en: name_en,
+                category: category,
+                updated_by: user.id 
+            });
+
+        if (error) {
+            showPoseMessage('體式提交失敗：' + error.message + ' (請檢查 Poses 表 RLS)', 'error');
+        } else {
+            showPoseMessage(`體式 "${name_zh}" 提交成功！`, 'success');
+            
+            // 清空表單並刷新體式列表 (供口令區選擇新體式)
+            document.getElementById('newPoseNameZh').value = '';
+            document.getElementById('newPoseNameEn').value = '';
+            document.getElementById('newPoseCategory').value = '';
+            
+            loadPosesForSelection(); // 重新載入下拉選單
+        }
+    }
+
+    function showPoseMessage(message, type = 'info') {
+        const poseMessage = document.getElementById('poseMessage');
+        poseMessage.innerHTML = message;
+        poseMessage.className = `message ${type}`;
+        poseMessage.style.display = 'block';
+    }
+
+
+    // =======================================================
+    // 5. 輔助函式 (保持不變)
     // =======================================================
     
     function showAuthMessage(message, type = 'info') {
